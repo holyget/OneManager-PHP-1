@@ -1,5 +1,5 @@
-202240429
-<font color="red">update theme</font>
+20220430-0030.13
+<font color="red">update theme fix admin login more</font>
 
 20220127-1234.43
 <font color="red">change login page, default not '?admin' but '?login=admin' now! and if set adminloginpage, it will be '?login=[value]'.</font> rm JumpFirstDisk, 403 in operating root, change sorting disk, remake disktags tab, add global md config. Allow Preview when enable downloadencrypt. some change in adding Onedrive disk. show upload progress in table background. fix some bugs.

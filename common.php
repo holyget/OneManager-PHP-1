@@ -619,7 +619,7 @@ function compareadminsha1($adminsha1, $timestamp, $pass)
         return 'The time in server is ' . time() . ' (' . date("Y-m-d H:i:s") . ' UTC),<br>and your time is ' . $timestamp . ' (' . date("Y-m-d H:i:s", $timestamp) . ' UTC)';
     }
     if ($adminsha1 == sha1($timestamp . $pass)) return '';
-    else return 'Error password';
+    else return '密码错误！！';
 }
 
 function proxy_replace_domain($url, $domainforproxy, &$header)
@@ -1867,7 +1867,7 @@ output:
             }
         }
         $frame .= '
-        <a href="https://github.com/qkqpttgf/OneManager-php" target="_blank">Github</a>
+        <a href="https://github.com/ariespan-Team/OneManager-php" target="_blank">Gayhub</a>
 <a href="https://git.hit.edu.cn/ysun/OneManager-php" target="_blank">HIT Gitlab</a><br><br>
 ';
         if (!$canOneKeyUpate) {
@@ -1882,7 +1882,7 @@ output:
         <option value="Github" selected>Github</option>
         <option value="HITGitlab">HIT Gitlab</option>
     </select>
-    <input type="text" name="auth" size="6" placeholder="auth" value="qkqpttgf">
+    <input type="text" name="auth" size="6" placeholder="auth" value="ariespan-Team">
     <input type="text" name="project" size="12" placeholder="project" value="OneManager-php">
     <button name="QueryBranchs" onclick="querybranchs(this);return false;">' . getconstStr('QueryBranchs') . '</button>
     <select name="branch">
