@@ -1867,7 +1867,7 @@ output:
             }
         }
         $frame .= '
-        <a href="https://github.com/ariespan-Team/OneManager-php" target="_blank">Gayhub</a>
+        <a href="https://github.com/ariespan-Team/OneManager-PHP/" target="_blank">Gayhub</a>
 <a href="https://git.hit.edu.cn/ysun/OneManager-php" target="_blank">HIT Gitlab</a><br><br>
 ';
         if (!$canOneKeyUpate) {
