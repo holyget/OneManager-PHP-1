@@ -1893,7 +1893,7 @@ output:
 
 <script>
     function changeGitSource(d) {
-        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "qkqpttgf";
+        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "ariespan-Team";
         if (d.options[d.options.selectedIndex].value=="HITGitlab") document.updateform.auth.value = "ysun";
         document.updateform.QueryBranchs.style.display = null;
         document.updateform.branch.options.length = 0;
@@ -2228,7 +2228,7 @@ function render_list($path = '', $files = [])
 <!--
     OneManager: An index & manager of Onedrive auth by ysun.
     HIT Gitlab: https://git.hit.edu.cn/ysun/OneManager-php
-    Github: https://github.com/qkqpttgf/OneManager-php
+    Github: https://github.com/ariespan-Team/OneManager-PHP/
 -->';
     //$authinfo = $path . '<br><pre>' . json_encode($files, JSON_PRETTY_PRINT) . '</pre>';
 
