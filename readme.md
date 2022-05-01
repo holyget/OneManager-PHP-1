@@ -1,5 +1,7 @@
 [中文readme](readme_cn.md)  
 
+# 此OneManager版本为ariespan.cn和shunt.ariespan.cn使用的分支版本，基于https://github.com/qkqpttgf/OneManager-php进行美化，添加更多主题，修复一些om原版的问题等。此版本与https://github.com/qkqpttgf/OneManager-php一样遵循GNU General Public License V3.0许可证开源，版权归qkqpttgf与所有贡献者所有
+
 # NOTICE: 
 
   The Releases is used as archive, not newest code.  

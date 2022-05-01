@@ -59,6 +59,7 @@ function GetPathSetting($event, $context)
     $_SERVER['referhost'] = explode('/', $event['headers']['referer'])[2];
     $_SERVER['HTTP_TRANSLATE'] = $event['headers']['translate'];//'f'
     $_SERVER['HTTP_IF_MODIFIED_SINCE'] = $event['headers']['if-modified-since'];
+    $_SERVER['REQUEST_METHOD'] = $event['httpMethod'];
     $_SERVER['USER'] = 'qcloud';
     return $path;
 }
@@ -660,4 +661,8 @@ function changeAuthKey() {
         }
     </script>';
     return message($html, 'Change platform Auth token or key', 200);
+}
+
+function smallfileupload($drive, $path) {
+    return output('Can not upload through SCF.', 400);
 }
