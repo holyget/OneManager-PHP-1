@@ -1075,8 +1075,8 @@ function needUpdate()
     $current_ver = explode(urldecode('%0D'),$current_ver)[0];
     $split = splitfirst($current_version, '.' . $current_ver)[0] . '.' . $current_ver;
     if (!($github_version = getcache('github_version'))) {
-        //$tmp = curl('GET', 'https://raw.githubusercontent.com/qkqpttgf/OneManager-php/master/version');
-        $tmp = curl('GET', 'https://git.hit.edu.cn/ysun/OneManager-php/-/raw/master/version');
+        //$tmp = curl('GET', 'https://raw.githubusercontent.com/ariespan-Team/OneManager-php/master/version');
+        $tmp = curl('GET', 'https://raw.githubusercontent.com/ariespan-Team/OneManager-php/master/version');
         if ($tmp['stat']==0) return 0;
         $github_version = $tmp['body'];
         savecache('github_version', $github_version);
@@ -1867,7 +1867,7 @@ output:
             }
         }
         $frame .= '
-        <a href="https://github.com/ariespan-Team/OneManager-php" target="_blank">Gayhub</a>
+        <a href="https://github.com/ariespan-Team/OneManager-PHP/" target="_blank">Gayhub</a>
 <a href="https://git.hit.edu.cn/ysun/OneManager-php" target="_blank">HIT Gitlab</a><br><br>
 ';
         if (!$canOneKeyUpate) {
@@ -1893,7 +1893,7 @@ output:
 
 <script>
     function changeGitSource(d) {
-        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "qkqpttgf";
+        if (d.options[d.options.selectedIndex].value=="Github") document.updateform.auth.value = "ariespan-Team";
         if (d.options[d.options.selectedIndex].value=="HITGitlab") document.updateform.auth.value = "ysun";
         document.updateform.QueryBranchs.style.display = null;
         document.updateform.branch.options.length = 0;
@@ -2228,7 +2228,7 @@ function render_list($path = '', $files = [])
 <!--
     OneManager: An index & manager of Onedrive auth by ysun.
     HIT Gitlab: https://git.hit.edu.cn/ysun/OneManager-php
-    Github: https://github.com/qkqpttgf/OneManager-php
+    Github: https://github.com/ariespan-Team/OneManager-PHP/
 -->';
     //$authinfo = $path . '<br><pre>' . json_encode($files, JSON_PRETTY_PRINT) . '</pre>';
 
