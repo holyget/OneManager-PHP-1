@@ -665,21 +665,6 @@
         disableAutoFetch: true,
         rangeChunkSize: 65535
     });
-    /*loadingTask.onProgress = (e) => {
-        //console.log(e);
-        var p = document.getElementById('p');
-        if (p==null) {
-            p = document.createElement('div');
-            p.id = 'p';
-            p.setAttribute('onclick', "this.style.display = 'none';");
-            p.style = 'left: 10px; top: 30%; position: fixed;';
-            document.body.appendChild(p);
-        }
-        p.innerHTML = 'Loaded: ' + ((e.loaded/e.total)*100).toFixed(2) + '%<br>(' + size_format(e.loaded) + ' / ' + size_format(e.total) + ')';
-        p.style.display = '';
-        if (e.loaded==e.total) p.style.display = 'none';
-        
-    }*/
     loadingTask.promise.then(function(pdf) {
         var pagenum =  pdf.numPages;
         var pdfContainer = document.getElementById('pdf-d');
@@ -693,6 +678,7 @@
         pdfContainer.appendChild(pdfnextpagebutton);
         var pdfWaitNextPage = setInterval(function(){
             //console.log(document.documentElement.scrollTop + ", " + document.body.scrollHeight);
+            console.log("next page: " + pagepos + " / " + pagenum);
             if (pdfnextpagebutton.style.display=='none') {
                 for (var i=pagepos;i<=(pagepos+4<pagenum?pagepos+4:pagenum);i++) {
                     var canvasNew = document.createElement('canvas');
@@ -702,7 +688,6 @@
                 }
                 pagepos = i;
                 if (pagepos<pagenum) {
-                    console.log("next page: " + pagepos + " / " + pagenum);
                     pdfnextpagebutton.innerText = 'Load page ' + pagepos + '-' + (pagepos+4<pagenum?pagepos+4:pagenum) + ' (' + pagenum + ')';
                     pdfnextpagebutton.style.display ='';
                     pdfContainer.appendChild(pdfnextpagebutton);
@@ -727,24 +712,6 @@
             };
             page.render(renderContext);
         });
-    }
-    function size_format(num) {
-        if (num>1024) {
-            num=num/1024;
-        } else {
-            return num.toFixed(2) + ' B';
-        }
-        if (num>1024) {
-            num=num/1024;
-        } else {
-            return num.toFixed(2) + ' KB';
-        }
-        if (num>1024) {
-            num=num/1024;
-        } else {
-            return num.toFixed(2) + ' MB';
-        }
-        return num.toFixed(2) + ' GB';
     }
 <!--IspdfFileEnd-->
 <!--IsFileEnd-->
@@ -989,6 +956,9 @@
                 uploadbuttonshow();
                 return;
             }
+            var upbigfilename = encodeURIComponent((file.webkitRelativePath||file.name));
+            uploading[upbigfilename] = i;
+            var filemd5='';
 <!--GuestStart-->
             function getext(str) {
                 strarry=str.split('.');
@@ -1011,6 +981,20 @@
             reader.readAsArrayBuffer(blob);
         }
         readblob(asize);
+
+        reader.onload = function(e){
+            td2.innerHTML='<!--constStr@Calculate--> md5: '+(asize*100/file.size).toFixed(2)+'%';
+            var binary = this.result;
+            spark.append(binary);
+            asize += chunksize;
+            if (asize < file.size) {
+                readblob(asize);
+            } else {
+                filemd5 = spark.end();
+                td2.innerHTML='md5: '+filemd5;
+                delete uploading[upbigfilename];
+                upbigfilename = filemd5+ext;
+                uploading[upbigfilename] = i;
 <!--GuestEnd-->
             td2.innerHTML='<!--constStr@GetUploadLink--> ...';
             var xhr1 = new XMLHttpRequest();
@@ -1074,7 +1058,7 @@
         var newstartsize = 0;
         if(!!file){
             var asize=0;
-            var chunksize=50*1024*1024; // chunk size, max 60M. 每小块上传大小，最大60M，微软建议10M
+            var chunksize=10*1024*1024; // chunk size, max 60M. 每小块上传大小，最大60M，微软建议10M
             var totalsize=file.size;
             var xhr2 = new XMLHttpRequest();
             xhr2.open("GET", url);
