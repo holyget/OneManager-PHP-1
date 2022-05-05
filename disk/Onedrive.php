@@ -1002,13 +1002,7 @@ class Onedrive {
         }
         $fileinfo['size'] = $_POST['filesize'];
         $fileinfo['filelastModified'] = $_POST['filelastModified'];
-        if ($_SERVER['admin']) {
-            $filename = spurlencode($_POST['upbigfilename'], '/');
-        } else {
-            $tmp1 = splitlast($fileinfo['name'], '.');
-            if ($tmp1[0]==''||$tmp1[1]=='') $filename = $_POST['filemd5'];
-            else $filename = $_POST['filemd5'] . '.' . $tmp1[1];
-        }
+        $filename = spurlencode($_POST['upbigfilename'], '/');
         if ($fileinfo['size']>10*1024*1024) {
             $cachefilename = spurlencode( $fileinfo['path'] . '/.' . $fileinfo['filelastModified'] . '_' . $fileinfo['size'] . '_' . $fileinfo['name'] . '.tmp', '/');
             $getoldupinfo = $this->list_files(path_format($path . '/' . $cachefilename));
